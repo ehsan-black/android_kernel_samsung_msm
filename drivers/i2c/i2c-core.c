@@ -196,6 +196,9 @@ static int i2c_device_pm_suspend(struct device *dev)
 {
 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
 
+	if (pm_runtime_suspended(dev))
+		return 0;
+
 	if (pm)
 		return pm_generic_suspend(dev);
 	else
@@ -205,16 +208,28 @@ static int i2c_device_pm_suspend(struct device *dev)
 static int i2c_device_pm_resume(struct device *dev)
 {
 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+	int ret;
 
 	if (pm)
-		return pm_generic_resume(dev);
+		ret = pm_generic_resume(dev);
 	else
-		return i2c_legacy_resume(dev);
+		ret = i2c_legacy_resume(dev);
+
+	if (!ret) {
+		pm_runtime_disable(dev);
+		pm_runtime_set_active(dev);
+		pm_runtime_enable(dev);
+	}
+
+	return ret;
 }
 
 static int i2c_device_pm_freeze(struct device *dev)
 {
 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+
+	if (pm_runtime_suspended(dev))
+		return 0;
 
 	if (pm)
 		return pm_generic_freeze(dev);
@@ -226,6 +241,9 @@ static int i2c_device_pm_thaw(struct device *dev)
 {
 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
 
+	if (pm_runtime_suspended(dev))
+		return 0;
+
 	if (pm)
 		return pm_generic_thaw(dev);
 	else
@@ -236,6 +254,9 @@ static int i2c_device_pm_poweroff(struct device *dev)
 {
 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
 
+	if (pm_runtime_suspended(dev))
+		return 0;
+
 	if (pm)
 		return pm_generic_poweroff(dev);
 	else
@@ -245,11 +266,20 @@ static int i2c_device_pm_poweroff(struct device *dev)
 static int i2c_device_pm_restore(struct device *dev)
 {
 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
+	int ret;
 
 	if (pm)
-		return pm_generic_restore(dev);
+		ret = pm_generic_restore(dev);
 	else
-		return i2c_legacy_resume(dev);
+		ret = i2c_legacy_resume(dev);
+
+	if (!ret) {
+		pm_runtime_disable(dev);
+		pm_runtime_set_active(dev);
+		pm_runtime_enable(dev);
+	}
+
+	return ret;
 }
 #else /* !CONFIG_PM_SLEEP */
 #define i2c_device_pm_suspend	NULL
@@ -318,7 +348,7 @@ struct bus_type i2c_bus_type = {
 	.probe		= i2c_device_probe,
 	.remove		= i2c_device_remove,
 	.shutdown	= i2c_device_shutdown,
-	.pm		= &i2c_device_pm_ops,
+//	.pm		= &i2c_device_pm_ops,	//hsil
 };
 EXPORT_SYMBOL_GPL(i2c_bus_type);
 
